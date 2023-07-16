@@ -53,7 +53,7 @@ def redownload_vid(id: str, path: Path) -> bool:
         file_name = Path(ydl.prepare_filename(info_dict))
         return file_name.exists()
 
-def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False) -> None:
+def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False, dir: Path = None) -> None:
     """Downloads all videos matching the desired filter, even if video is still being processed by Youtube.
        Uses the download archive file from yt-dlp to safe states if video is still being processed.
        Every video is downloaded in the first place, to have a (lower quality) version of the video even if Youtube deletes the video some time after its been uploaded.
@@ -62,7 +62,8 @@ def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool 
        Note: Dont delete the archive txt file because it safes state which videos are already downloaded and which have already best quality available"""
 
     file_name = validate_path(f"{get_channels_name(url)}_{regex.lower()}")
-    download_archive = Path(f"{file_name}/{file_name}.txt")
+    print(dir)
+    download_archive = Path(f"{file_name if not dir else dir}/{file_name}.txt")
     archive_existed = download_archive.exists()
 
     # downloads all videos that match the regex if no files were downloaded
@@ -106,12 +107,13 @@ def cli_argument_parser():
     argParser.add_argument("channel_url", type=str, help="The url of the channel to watch for matching criterias")
     argParser.add_argument("-n", "--name", default="title ~=.*", type=str, help="Match video's title with given Regex")
     argParser.add_argument("-a", "--download-all-matches", action="store_true", help="Download all videos that match the given regex")
+    argParser.add_argument("-d", "--directory", type=Path, help="Directory where videos are safed to")
 
     return argParser.parse_args()
 
 def main():
     args = cli_argument_parser()
-    check_for_new_video(args.channel_url, args.name, args.download_all_matches)
+    check_for_new_video(args.channel_url, args.name, args.download_all_matches, args.directory)
 
 if __name__ == "__main__":
     main()
