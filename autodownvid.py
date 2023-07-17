@@ -2,7 +2,27 @@ from __const__ import *
 import argparse
 import yt_dlp
 import os
+import signal
 from pathlib import Path
+
+download_archive: Path = None
+archive_existed: bool = False
+EXITED_N_TIMES = 0
+
+def cleaner():
+    args = cli_argument_parser()
+    check_for_new_video(args.channel_url, args.name, args.download_all_matches, args.directory, download=False)
+
+def signal_handler(sig, frame):
+    global EXITED_N_TIMES
+    EXITED_N_TIMES += 1
+    print('Received SIGINT, cleaning up ...')
+    if EXITED_N_TIMES < 10:
+        cleaner()
+    os._exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGHUP, signal_handler)
 
 def get_downloads_info(url: str) -> tuple[str, str]:
     """Get the downloads targets channel and id from the given url"""
@@ -52,22 +72,24 @@ def redownload_vid(id: str, path: Path) -> bool:
         file_name = Path(ydl.prepare_filename(info_dict))
         return file_name.exists()
 
-def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False, dir: Path = None) -> None:
+def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False, dir: Path = None, download: bool = True) -> None:
     """Downloads all videos matching the desired filter, even if video is still being processed by Youtube.
        Uses the download archive file from yt-dlp to safe states if video is still being processed.
        Every video is downloaded in the first place, to have a (lower quality) version of the video even if Youtube deletes the video some time after its been uploaded.
        When file is done processing, it downloads the video again, now in better quality and deletes the old version.
        @param download_all use it when you want to download every file matching the regex and was not downloaded already.\n
        Note: Dont delete the archive txt file because it safes state which videos are already downloaded and which have already best quality available"""
-    
+
+    global download_archive, archive_existed
     channel_name, yt_id  = get_downloads_info(url)
     file_name = validate_path(f"{channel_name}_{yt_id}")
     download_archive = Path(f"{file_name if not dir else dir}/{file_name}.txt")
-    archive_existed = download_archive.exists()
 
     # downloads all videos that match the regex if no files were downloaded
     # if there were already files downloaded, only the latest few videos are checked whether they match the regex
-    _download_all_latest(url, regex, download_archive, latest=archive_existed if not download_all else False)
+    if download:
+        archive_existed = download_archive.exists()
+        _download_all_latest(url, regex, download_archive, latest=archive_existed if not download_all else False)
 
     if not download_archive.exists():
         return
