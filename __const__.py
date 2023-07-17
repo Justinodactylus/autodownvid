@@ -3,7 +3,7 @@ import yt_dlp
 SCAN_LAST_N_VIDEOS = 10
 POST_PROCESSING_DONE = "POST_PROCESSING_DONE"
 
-YDL_OPTS_CHANNEL_NAME = {
+YDL_OPTS_DOWNLOADS_INFO = {
         'forceprint': {'video': ['%(channel)s']},
         'noprogress': True,
         'playlist_items': '1',
@@ -15,7 +15,7 @@ YDL_OPTS_BULK_DOWNLOAD = {
         'allow_playlist_files': False,
         'download_archive': 'archive.txt',
         'format': 'bestvideo[height>=720]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'getcomments': False,
+        'getcomments': True,
         'match_filter': yt_dlp.match_filter_func("title ~=.* & !is_post_live_dvr"),
         'merge_output_format': 'mp4',
         'outtmpl': {'default': '%(title)s.%(ext)s',

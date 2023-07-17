@@ -2,18 +2,17 @@ from __const__ import *
 import argparse
 import yt_dlp
 import os
-import json
 from pathlib import Path
 
-def get_channels_name(url: str) -> str:
-    """Get the channels name from the given url"""
+def get_downloads_info(url: str) -> tuple[str, str]:
+    """Get the downloads targets channel and id from the given url"""
 
-    with yt_dlp.YoutubeDL(YDL_OPTS_CHANNEL_NAME) as ydl:
+    with yt_dlp.YoutubeDL(YDL_OPTS_DOWNLOADS_INFO) as ydl:
         info = ydl.extract_info(url, download=False)
 
         # ℹ️ ydl.sanitize_info makes the info json-serializable
         info_dict = ydl.sanitize_info(info)
-        return info_dict.get('channel', url).lower()
+        return info_dict.get('channel', url).lower(), info_dict.get('id', "")
 
 def validate_path(path: str) -> str:
     """Replace invalid characters in path"""
@@ -60,9 +59,9 @@ def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool 
        When file is done processing, it downloads the video again, now in better quality and deletes the old version.
        @param download_all use it when you want to download every file matching the regex and was not downloaded already.\n
        Note: Dont delete the archive txt file because it safes state which videos are already downloaded and which have already best quality available"""
-
-    file_name = validate_path(f"{get_channels_name(url)}_{regex.lower()}")
-    print(dir)
+    
+    channel_name, yt_id  = get_downloads_info(url)
+    file_name = validate_path(f"{channel_name}_{yt_id}")
     download_archive = Path(f"{file_name if not dir else dir}/{file_name}.txt")
     archive_existed = download_archive.exists()
 
@@ -103,16 +102,19 @@ def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool 
 def cli_argument_parser():
     """`Returns` a ArgumentParser instance with specific arguments necessary for the program."""
 
-    argParser = argparse.ArgumentParser(description='A script to automatically download YouTube Videos which match specific criterias.')
-    argParser.add_argument("channel_url", type=str, help="The url of the channel to watch for matching criterias")
+    argParser = argparse.ArgumentParser(description='A script to automatically download YouTube Videos which match given filters.')
+    argParser.add_argument("channel_url", type=str, help="The url of the video(s) source")
     argParser.add_argument("-n", "--name", default="title ~=.*", type=str, help="Match video's title with given Regex")
     argParser.add_argument("-a", "--download-all-matches", action="store_true", help="Download all videos that match the given regex")
     argParser.add_argument("-d", "--directory", type=Path, help="Directory where videos are safed to")
+    argParser.add_argument("--skip-download", action="store_true", help="No files get downloaded")
 
     return argParser.parse_args()
 
 def main():
     args = cli_argument_parser()
+    if args.skip_download:
+        return
     check_for_new_video(args.channel_url, args.name, args.download_all_matches, args.directory)
 
 if __name__ == "__main__":
