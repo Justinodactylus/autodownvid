@@ -12,7 +12,7 @@ def print_text(text: str, end: str = "\n"):
 def cleaner():
     args = cli_argument_parser()
     for video_list in args.channel_url:
-        check_for_new_video(video_list, args.name, args.download_all_matches, args.directory, download=False)
+        check_for_new_video(video_list, args.name, args.download_all_matches, args.directory, download=False, extra_dir=len(args.channel_url) > 1)
 
 def signal_handler(sig, frame):
     global EXITED_N_TIMES
@@ -76,7 +76,7 @@ def redownload_vid(id: str, path: Path) -> bool:
         file_name = Path(ydl.prepare_filename(info_dict))
         return file_name.exists()
 
-def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False, dir: Path = None, download: bool = True) -> None:
+def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False, dir: Path = None, extra_dir: bool = False, download: bool = True) -> None:
     """Downloads all videos matching the desired filter, even if video is still being processed by Youtube.
        Uses the download archive file from yt-dlp to safe states if video is still being processed.
        Every video is downloaded in the first place, to have a (lower quality) version of the video even if Youtube deletes the video some time after its been uploaded.
@@ -88,7 +88,7 @@ def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool 
     archive_existed: bool = False
     channel_name, yt_id  = get_downloads_info(url)
     file_name = validate_path(f"{channel_name}_{yt_id}")
-    download_archive = Path(f"{file_name if not dir else dir}/{file_name}.txt")
+    download_archive = Path(f"{file_name if not dir else dir}/{file_name + '/' if extra_dir else ''}{file_name}.txt")
 
     # downloads all videos that match the regex if no files were downloaded
     # if there were already files downloaded, only the latest few videos are checked whether they match the regex
@@ -144,7 +144,7 @@ def main():
     if args.skip_download:
         return
     for video_list in args.channel_url:
-        check_for_new_video(video_list, args.name, args.download_all_matches, args.directory)
+        check_for_new_video(video_list, args.name, args.download_all_matches, args.directory, extra_dir=len(args.channel_url) > 1)
 
 if __name__ == "__main__":
     main()
