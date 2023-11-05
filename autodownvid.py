@@ -12,7 +12,7 @@ def print_text(text: str, end: str = "\n"):
 def cleaner():
     args = cli_argument_parser()
     for video_list in args.channel_url:
-        check_for_new_video(video_list, args.name, args.download_all_matches, args.directory, download=False, extra_dir=len(args.channel_url) > 1)
+        check_for_new_video(video_list, args.regex, args.download_all_matches, args.directory, download=False, extra_dir=len(args.channel_url) > 1, lastN=args.matches)
 
 def signal_handler(sig, frame):
     global EXITED_N_TIMES
@@ -42,7 +42,12 @@ def validate_path(path: str) -> str:
         path = path.replace(char, "")
     return path
 
-def _download_all_latest(url: str, filter: str, download_archive: Path, latest: bool = True) -> None:
+def _download_all_latest(
+    url: str,
+    filter: str,
+    download_archive: Path,
+    lastN: int | None
+) -> None:
     """Downloads every video not processing and matching the regex filter or check if last N videos match the filter."""
 
     ytdl_opts_bulk_download = YDL_OPTS_BULK_DOWNLOAD.copy()
@@ -55,12 +60,12 @@ def _download_all_latest(url: str, filter: str, download_archive: Path, latest: 
         'thumbnail': f'{download_archive.parent}/%(title)s/%(title)s.%(ext)s'}
 
     print_text(f"[{url}] Starting download", end=" ")
-    if latest:
-        ytdl_opts_bulk_download['playlistend'] = SCAN_LAST_N_VIDEOS
+    if lastN:
+        ytdl_opts_bulk_download['playlistend'] = lastN
         ytdl_opts_bulk_download['playlistreverse'] = True
         ytdl_opts_bulk_download['outtmpl']['default'] = f'{download_archive.parent}/%(title)s-%(id)s".%(ext)s'
         ytdl_opts_bulk_download['match_filter'] = yt_dlp.match_filter_func(filter)
-        print_text(f"of latest {SCAN_LAST_N_VIDEOS} Videos", end=" ")
+        print_text(f"of latest {lastN} Videos", end=" ")
     print_text("...")
     with yt_dlp.YoutubeDL(ytdl_opts_bulk_download) as ydl:
         ydl.download(url)
@@ -76,12 +81,21 @@ def redownload_vid(id: str, path: Path) -> bool:
         file_name = Path(ydl.prepare_filename(info_dict))
         return file_name.exists()
 
-def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool = False, dir: Path = None, extra_dir: bool = False, download: bool = True) -> None:
+def check_for_new_video(
+    url: str,
+    regex: str = "title ~=.*",
+    download_all: bool = False,
+    dir: Path = None,
+    extra_dir: bool = False,
+    download: bool = True,
+    lastN: int = None
+)-> None:
     """Downloads all videos matching the desired filter, even if video is still being processed by Youtube.
        Uses the download archive file from yt-dlp to safe states if video is still being processed.
        Every video is downloaded in the first place, to have a (lower quality) version of the video even if Youtube deletes the video some time after its been uploaded.
        When file is done processing, it downloads the video again, now in better quality and deletes the old version.
-       @param download_all use it when you want to download every file matching the regex and was not downloaded already.\n
+       @param download_all use it when you want to download every file matching the regex and was not downloaded already.
+       LastN specifies the amount of matches that should be downloaded.\n
        Note: Dont delete the archive txt file because it safes state which videos are already downloaded and which have already best quality available"""
 
     download_archive: Path = None
@@ -94,7 +108,9 @@ def check_for_new_video(url: str, regex: str = "title ~=.*", download_all: bool 
     # if there were already files downloaded, only the latest few videos are checked whether they match the regex
     if download:
         archive_existed = download_archive.exists()
-        _download_all_latest(url, regex, download_archive, latest=archive_existed if not download_all else False)
+        if archive_existed and not lastN:
+            lastN = SCAN_LAST_N_VIDEOS
+        _download_all_latest(url, regex, download_archive, lastN=lastN if not download_all else None)
 
     if not download_archive.exists():
         return
@@ -132,9 +148,10 @@ def cli_argument_parser():
 
     argParser = argparse.ArgumentParser(description='A script to automatically download YouTube Videos which match given filters.')
     argParser.add_argument("channel_url", type=str, nargs="+", help="The url of the video(s) source")
-    argParser.add_argument("-n", "--name", default="title ~=.*", type=str, help="Match video's title with given Regex")
+    argParser.add_argument("-r", "--match-regex", dest="regex", default="title ~=.*", type=str, help="Match video's title with given Regex")
     argParser.add_argument("-a", "--download-all-matches", action="store_true", help="Download all videos that match the given regex")
     argParser.add_argument("-d", "--directory", type=Path, help="Directory where videos are safed to")
+    argParser.add_argument("-n", "--download-last-N-matches", default=None, dest="matches", type=int, help="Amount of matches that should be downloaded")
     argParser.add_argument("--skip-download", action="store_true", help="No files get downloaded")
 
     return argParser.parse_args()
@@ -144,7 +161,7 @@ def main():
     if args.skip_download:
         return
     for video_list in args.channel_url:
-        check_for_new_video(video_list, args.name, args.download_all_matches, args.directory, extra_dir=len(args.channel_url) > 1)
+        check_for_new_video(video_list, args.regex, args.download_all_matches, args.directory, extra_dir=len(args.channel_url) > 1, lastN=args.matches)
 
 if __name__ == "__main__":
     main()
