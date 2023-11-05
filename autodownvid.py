@@ -46,11 +46,13 @@ def _download_all_latest(
     url: str,
     filter: str,
     download_archive: Path,
-    lastN: int | None
+    lastN: int | None,
+    quality: int = None
 ) -> None:
     """Downloads every video not processing and matching the regex filter or check if last N videos match the filter."""
 
     ytdl_opts_bulk_download = YDL_OPTS_BULK_DOWNLOAD.copy()
+    ytdl_opts_bulk_download['format'] = f"bestvideo[height{'<' if quality else '>'}={quality if quality else '720'}]+bestaudio[ext=m4a]/best[ext=mp4]/best"
     ytdl_opts_bulk_download['download_archive'] = download_archive.__str__()
     ytdl_opts_bulk_download['match_filter'] = yt_dlp.match_filter_func(f"{filter} & !is_post_live_dvr")
     ytdl_opts_bulk_download['outtmpl'] = {
@@ -70,12 +72,13 @@ def _download_all_latest(
     with yt_dlp.YoutubeDL(ytdl_opts_bulk_download) as ydl:
         ydl.download(url)
 
-def redownload_vid(id: str, path: Path) -> bool:
+def redownload_vid(id: str, path: Path, quality: int = None) -> bool:
     """Downloads a video that is fully processed by youtube from given `id` and returns whether file was actually downloaded or not"""
 
     print_text(f"[{id}] Starting redownload ...")
     ytdl_opts_single_download = YDL_OPTS_SINGLE_DOWNLOAD.copy()
     ytdl_opts_single_download['outtmpl'] = {'default': f'{path}/%(title)s.%(ext)s', 'pl_thumbnail': ''}
+    ytdl_opts_single_download['format'] = f"bestvideo[height{'<' if quality else '>'}={quality if quality else '720'}]+bestaudio[ext=m4a]/best[ext=mp4]/best"
     with yt_dlp.YoutubeDL(ytdl_opts_single_download) as ydl:
         info_dict = ydl.extract_info(id, download=True)
         file_name = Path(ydl.prepare_filename(info_dict))
@@ -88,7 +91,8 @@ def check_for_new_video(
     dir: Path = None,
     extra_dir: bool = False,
     download: bool = True,
-    lastN: int = None
+    lastN: int = None,
+    quality: int = None
 )-> None:
     """Downloads all videos matching the desired filter, even if video is still being processed by Youtube.
        Uses the download archive file from yt-dlp to safe states if video is still being processed.
@@ -110,7 +114,7 @@ def check_for_new_video(
         archive_existed = download_archive.exists()
         if archive_existed and not lastN:
             lastN = SCAN_LAST_N_VIDEOS
-        _download_all_latest(url, regex, download_archive, lastN=lastN if not download_all else None)
+        _download_all_latest(url, regex, download_archive, lastN=lastN if not download_all else None, quality=quality)
 
     if not download_archive.exists():
         return
@@ -130,7 +134,7 @@ def check_for_new_video(
 
         real_id = ids[i].rpartition(" ")[2].replace("\n", "")
         # check if video is now fully processed by Youtube and if so download it again and delete old video file
-        if redownload_vid(real_id, download_archive.parent):
+        if redownload_vid(real_id, download_archive.parent, quality):
             for file in os.listdir(download_archive.parent):
                 if file.find(real_id) != -1:
                     print_text(f"[{real_id}] Video was redownloaded due to better quality being available. Deleting old file '{download_archive.parent}/{file}' ...")
@@ -151,6 +155,7 @@ def cli_argument_parser():
     argParser.add_argument("-r", "--match-regex", dest="regex", default="title ~=.*", type=str, help="Match video's title with given Regex")
     argParser.add_argument("-a", "--download-all-matches", action="store_true", help="Download all videos that match the given regex")
     argParser.add_argument("-d", "--directory", type=Path, help="Directory where videos are safed to")
+    argParser.add_argument("-q", "--quality", type=int, help="Set the maximum quality that should be downloaded. Only integers are allowed. F.e. 720 or 1080")
     argParser.add_argument("-n", "--download-last-N-matches", default=None, dest="matches", type=int, help="Amount of matches that should be downloaded")
     argParser.add_argument("--skip-download", action="store_true", help="No files get downloaded")
 
@@ -161,7 +166,7 @@ def main():
     if args.skip_download:
         return
     for video_list in args.channel_url:
-        check_for_new_video(video_list, args.regex, args.download_all_matches, args.directory, extra_dir=len(args.channel_url) > 1, lastN=args.matches)
+        check_for_new_video(video_list, args.regex, args.download_all_matches, args.directory, extra_dir=len(args.channel_url) > 1, lastN=args.matches, quality=args.quality)
 
 if __name__ == "__main__":
     main()
